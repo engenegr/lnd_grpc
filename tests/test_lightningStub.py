@@ -2,7 +2,7 @@ import os
 import time
 import unittest
 
-import bitcoin.rpc
+import lnd_grpc.bitcoin.rpc as bitcoin
 import grpc
 
 import lnd_grpc.lnd_grpc as py_rpc
@@ -63,8 +63,8 @@ def initialise_clients():
             pubkey=bob.pub_key,
             host=BOB_HOST_ADDR)
 
-    bitcoin_rpc = bitcoin.rpc.RawProxy(service_port=BITCOIN_SERVICE_PORT,
-                                       btc_conf_file=BITCOIN_CONF_FILE)
+    bitcoin_rpc = bitcoin.RawProxy(service_port=BITCOIN_SERVICE_PORT,
+                                   btc_conf_file=BITCOIN_CONF_FILE)
     BITCOIN_ADDR = bitcoin_rpc.getnewaddress()
 
     return alice, bob, bitcoin_rpc
@@ -114,7 +114,7 @@ class TestLightningStubResponses(unittest.TestCase):
         self.assertIsInstance(self.alice, py_rpc.Client)
         self.assertIsInstance(self.alice.channel, grpc._channel.Channel)
         self.assertIsInstance(self.bob, py_rpc.Client)
-        self.assertIsInstance(self.bitcoin_rpc, bitcoin.rpc.RawProxy)
+        self.assertIsInstance(self.bitcoin_rpc, bitcoin.RawProxy)
 
     def test_wallet_balance(self):
         self.assertIsInstance(self.alice.wallet_balance(), rpc_pb2.WalletBalanceResponse)

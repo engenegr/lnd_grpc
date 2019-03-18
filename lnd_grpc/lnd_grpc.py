@@ -160,6 +160,13 @@ class Client:
         return self._lightning_stub
 
     @property
+    def insecure_stub(self):
+        creds = grpc.ssl_channel_credentials(self.tls_cert)
+        channel = grpc.secure_channel('localhost:{}'.format(self.grpc_port), creds)
+        self._insecure_stub = lnrpc.LightningStub(channel)
+        return self._insecure_stub
+
+    @property
     def wallet_unlocker_stub(self,
                              cert_path: str = None):
         if cert_path is not None:

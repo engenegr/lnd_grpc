@@ -5,8 +5,8 @@ from os import environ
 
 import grpc
 
-from lnd_grpc import utilities as u
-from lnd_grpc.protos import rpc_pb2 as ln, rpc_pb2_grpc as lnrpc
+import utilities as u
+import rpc_pb2 as ln, rpc_pb2_grpc as lnrpc
 
 # tell gRPC which cypher suite to use
 environ["GRPC_SSL_CIPHER_SUITES"] = 'HIGH+ECDSA'

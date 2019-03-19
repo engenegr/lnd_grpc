@@ -81,16 +81,16 @@ def idfn(impls):
 @pytest.mark.parametrize("impl", impls, ids=idfn)
 def test_start(bitcoind, node_factory, impl):
     node = node_factory.get_node(implementation=impl)
-    assert node.ping()
-    sync_blockheight(bitcoind, [node])
+    assert node.get_info()
+    # sync_blockheight(bitcoind, [node])
 
 
-@pytest.mark.parametrize("impl", impls, ids=idfn)
-def test_wallet_balance(node_factory, impl):
-    node = node_factory.get_node(implementation=impl)
-    assert(type(node.wallet_balance()), rpc_pb2.WalletBalanceResponse)
-    # lambda function prevents TypeError being raised before assert is run.
-    # node.assertRaises(TypeError, lambda: node.alice.wallet_balance('please'))
+# @pytest.mark.parametrize("impl", impls, ids=idfn)
+# def test_wallet_balance(node_factory, impl):
+#     node = node_factory.get_node(implementation=impl)
+#     assert(type(node.get_info()), rpc_pb2.GetInfoResponse)
+#     lambda function prevents TypeError being raised before assert is run.
+#     node.assertRaises(TypeError, lambda: node.alice.wallet_balance('please'))
 
 # @pytest.mark.parametrize("impls", product(impls, repeat=2), ids=idfn)
 # def test_connect(node_factory, bitcoind, impls):

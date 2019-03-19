@@ -101,9 +101,43 @@ class Client:
         callback([('macaroon', self.macaroon)], None)
 
     def build_credentials(self):
-        self.cert_creds = grpc.ssl_channel_credentials(self.tls_cert_key)
-        self.auth_creds = grpc.metadata_call_credentials(self.metadata_callback)
-        self.combined_creds = grpc.composite_channel_credentials(self.cert_creds, self.auth_creds)
+        _cert_creds = grpc.ssl_channel_credentials(self.tls_cert)
+        _auth_creds = grpc.metadata_call_credentials(self.metadata_callback)
+        self.combined_creds = grpc.composite_channel_credentials(_cert_creds, _auth_creds)
+
+    @property
+    def insecure_stub(self):
+        creds = grpc.ssl_channel_credentials(self.tls_cert)
+        channel = grpc.secure_channel('localhost:{}'.format(self.rpc_port), creds)
+        _insecure_stub = lnrpc.LightningStub(channel)
+        return _insecure_stub
+
+    @property
+    def lightning_stub(self,
+                       cert_path: str = None,
+                       macaroon_path: str = None):
+
+        if cert_path is not None:
+            self.tls_cert_path = cert_path
+        if macaroon_path is not None:
+            self.macaroon_path = macaroon_path
+
+        self.build_credentials()
+        _channel = grpc.secure_channel(target=self.grpc_address,
+                                       credentials=self.combined_creds,
+                                       options=self.grpc_options)
+        _lightning_stub = lnrpc.LightningStub(_channel)
+        return _lightning_stub
+
+    @property
+    def wallet_unlocker_stub(self,
+                             cert_path: str = None):
+        if cert_path is not None:
+            self.tls_cert_path = cert_path
+        _ssl_creds = grpc.ssl_channel_credentials(self.tls_cert)
+        _w_channel = grpc.secure_channel(self.grpc_address, _ssl_creds)
+        _w_stub = lnrpc.WalletUnlockerStub(_w_channel)
+        return _w_stub
 
     @property
     def grpc_address(self):
@@ -137,41 +171,6 @@ class Client:
     @staticmethod
     def bytes_to_hex(bytestring: bytes):
         return bytestring.hex()
-
-    @property
-    def lightning_stub(self,
-                       cert_path: str = None,
-                       macaroon_path: str = None):
-
-        if cert_path is not None:
-            self.tls_cert_path = cert_path
-        if macaroon_path is not None:
-            self.macaroon_path = macaroon_path
-
-        self.build_credentials()
-        self.channel = grpc.secure_channel(target=self.grpc_address,
-                                           credentials=self.combined_creds,
-                                           options=self.grpc_options)
-        self._lightning_stub = lnrpc.LightningStub(self.channel)
-        return self._lightning_stub
-
-    @property
-    def insecure_stub(self):
-        creds = grpc.ssl_channel_credentials(self.tls_cert)
-        channel = grpc.secure_channel('localhost:{}'.format(self.grpc_port), creds)
-        self._insecure_stub = lnrpc.LightningStub(channel)
-        return self._insecure_stub
-
-    @property
-    def wallet_unlocker_stub(self,
-                             cert_path: str = None):
-        if cert_path is not None:
-            self.tls_cert_path = cert_path
-        self.ssl_creds = grpc.ssl_channel_credentials(self.tls_cert_key)
-        self._w_channel = grpc.secure_channel(self.grpc_address,
-                                              self.ssl_creds)
-        self._w_stub = lnrpc.WalletUnlockerStub(self._w_channel)
-        return self._w_stub
 
     def gen_seed(self, **kwargs):
         request = ln.GenSeedRequest(**kwargs)

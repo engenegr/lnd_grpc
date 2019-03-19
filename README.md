@@ -52,7 +52,7 @@ The class instantiation takes the the following arguments which you can change a
 
 ```
     (
-    lnd_dir: str = None, \
+    data_dir: str = None, \
     macaroon_path: str = None, \
     tls_cert_path: str = None \
     network: str = 'mainnet', \

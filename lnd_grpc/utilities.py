@@ -3,18 +3,18 @@ from pathlib import Path
 from os import environ, path
 
 
-def get_lnd_dir():
+def set_data_dir():
     """
     Set default LND directory based on detected OS platform
     """
-    lnd_dir = None
+    _lnd_dir = None
     _platform = platform.system()
-    home_dir = str(Path.home())
+    _home_dir = str(Path.home())
     if _platform == 'Darwin':
-        lnd_dir = home_dir + '/Library/Application Support/Lnd/'
+        _lnd_dir = _home_dir + '/Library/Application Support/Lnd/'
     elif _platform == 'Linux':
-        lnd_dir = home_dir + '/.lnd/'
+        _lnd_dir = _home_dir + '/.lnd/'
     elif _platform == 'Windows':
-        lnd_dir = path.abspath(environ.get('LOCALAPPDATA') + 'Lnd/')
-    return lnd_dir
+        _lnd_dir = path.abspath(environ.get('LOCALAPPDATA') + 'Lnd/')
+    return _lnd_dir
 

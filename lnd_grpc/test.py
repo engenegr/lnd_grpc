@@ -64,6 +64,15 @@ def generate_until(btc, success, blocks=30, interval=1):
         raise ValueError("Generated %d blocks, but still no success", blocks)
 
 
+def get_addresses(node, response='str'):
+    p2wkh_address = node.new_address(address_type='p2wkh')
+    np2wkh_address = node.new_address(address_type='np2wkh')
+    if response == 'str':
+        return p2wkh_address.address, np2wkh_address.address
+    else:
+        return p2wkh_address, np2wkh_address
+
+
 def idfn(impls):
     return "_".join([i.displayName for i in impls])
 
@@ -123,8 +132,7 @@ def test_get_transactions(node_factory, impl):
 def test_send_coins(node_factory, impl):
     node = node_factory.get_node(implementation=impl)
     node.add_funds(node.bitcoin, 1)
-    p2wkh_address = node.new_address(address_type='p2wkh').address
-    np2wkh_address = node.new_address(address_type='np2wkh').address
+    p2wkh_address, np2wkh_address = get_addresses(node)
 
     send1 = node.send_coins(addr=p2wkh_address, amount=100000)
     node.bitcoin.rpc.generate(1)
@@ -153,6 +161,15 @@ def test_subscribe_transactions(node_factory, impl):
     node.add_funds(node.bitcoin, 1)
     assert type(subscription) == grpc._channel._Rendezvous
     assert type(subscription.__next__()) == rpc_pb2.Transaction
+
+
+@pytest.mark.parametrize("impl", impls, ids=idfn)
+def test_new_address(node_factory, impl):
+    node = node_factory.get_node(implementation=impl)
+    p2wkh_address, np2wkh_address = get_addresses(node, 'response')
+    assert type(p2wkh_address) == rpc_pb2.NewAddressResponse
+    assert type(np2wkh_address) == rpc_pb2.NewAddressResponse
+
 #
 #
 # def confirm_channel(bitcoind, n1, n2):

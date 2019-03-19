@@ -6,7 +6,8 @@ from os import environ
 import grpc
 
 import utilities as u
-import rpc_pb2 as ln, rpc_pb2_grpc as lnrpc
+import rpc_pb2 as ln
+import rpc_pb2_grpc as lnrpc
 
 # tell gRPC which cypher suite to use
 environ["GRPC_SSL_CIPHER_SUITES"] = 'HIGH+ECDSA'
@@ -15,23 +16,20 @@ environ["GRPC_SSL_CIPHER_SUITES"] = 'HIGH+ECDSA'
 class Client:
 
     def __init__(self,
-                 lnd_dir: str = None,
+                 data_dir: str = None,
                  macaroon_path: str = None,
                  tls_cert_path: str = None,
                  network: str = 'mainnet',
-                 grpc_host: str = 'localhost',
-                 grpc_port: str = '10009'):
+                 rpc_host: str = 'localhost',
+                 rpc_port: str = '10009'):
 
-        self.lnd_dir = lnd_dir
+        self.data_dir = data_dir
         self.macaroon_path = macaroon_path
         self.tls_cert_path = tls_cert_path
         self.network = network
-        self.grpc_host = grpc_host
-        self.grpc_port = grpc_port
-        self.cert_creds = None
-        self.auth_creds = None
+        self.rpc_host = rpc_host
+        self.rpc_port = rpc_port
         self.combined_creds = None
-        self.channel = None
         self.version = None
         self.grpc_options = [
             ('grpc.max_receive_message_length', 33554432),
@@ -39,21 +37,19 @@ class Client:
         ]
 
     @property
-    def lnd_dir(self):
-        if self._lnd_dir:
-            return self._lnd_dir
-        else:
-            self._lnd_dir = u.get_lnd_dir()
-            return self._lnd_dir
+    def data_dir(self):
+        if self._data_dir is None:
+            self._data_dir = u.set_data_dir()
+        return self._data_dir
 
-    @lnd_dir.setter
-    def lnd_dir(self, path):
-        self._lnd_dir = path
+    @data_dir.setter
+    def data_dir(self, path):
+        self._data_dir = path
 
     @property
     def tls_cert_path(self):
         if self._tls_cert_path is None:
-            self._tls_cert_path = self.lnd_dir + 'tls.cert'
+            self._tls_cert_path = self.data_dir + 'tls.cert'
         return self._tls_cert_path
 
     @tls_cert_path.setter
@@ -61,23 +57,23 @@ class Client:
         self._tls_cert_path = path
 
     @property
-    def tls_cert_key(self):
+    def tls_cert(self):
         try:
             with open(self.tls_cert_path, 'rb') as r:
-                self._tls_cert_key = r.read()
+                _tls_cert = r.read()
+            try:
+                assert _tls_cert.startswith(b'-----BEGIN CERTIFICATE-----')
+                return _tls_cert
+            except (AssertionError, AttributeError):
+                sys.stderr.write("TLS cert at %s did not start with b'-----BEGIN CERTIFICATE-----')"
+                                 % self.tls_cert_path)
         except FileNotFoundError:
             sys.stderr.write("TLS cert not found at %s" % self.tls_cert_path)
-        try:
-            assert self._tls_cert_key.startswith(b'-----BEGIN CERTIFICATE-----')
-            return self._tls_cert_key
-        except (AssertionError, AttributeError):
-            sys.stderr.write("TLS cert at %s did not start with b'-----BEGIN CERTIFICATE-----')"
-                             % self.tls_cert_path)
 
     @property
     def macaroon_path(self):
         if not self._macaroon_path:
-            self._macaroon_path = self.lnd_dir + \
+            self._macaroon_path = self.data_dir + \
                                   'data/chain/bitcoin/%s/admin.macaroon' \
                                   % self.network
             return self._macaroon_path
@@ -93,13 +89,13 @@ class Client:
         try:
             with open(self.macaroon_path, 'rb') as f:
                 macaroon_bytes = f.read()
-                self._macaroon = codecs.encode(macaroon_bytes, 'hex')
-                return self._macaroon
+                _macaroon = codecs.encode(macaroon_bytes, 'hex')
+                return _macaroon
         except FileNotFoundError:
-            sys.stderr.write(f"Could not find macaroon in {self.macaroon_path}. This might happen"
-                             f"in versions of lnd < v0.5-beta or those not using default"
-                             f"installation path. Set client object's macaroon_path attribute"
-                             f"manually.")
+            sys.stderr.write(f"Could not find macaroon in {self.macaroon_path}. This might happen "
+                             f"in versions of lnd < v0.5-beta or those not using default "
+                             f"data directory. "
+                             f"Set client object's macaroon_path attribute manually.")
 
     def metadata_callback(self, context, callback):
         callback([('macaroon', self.macaroon)], None)
@@ -111,8 +107,8 @@ class Client:
 
     @property
     def grpc_address(self):
-        self._address = str(self.grpc_host + ':' + self.grpc_port)
-        return self._address
+        _address = str(self.rpc_host + ':' + self.rpc_port)
+        return _address
 
     @property
     def version(self):

@@ -1,17 +1,10 @@
-from binascii import hexlify
-from utils import TailableProc, BITCOIND_CONFIG
-import rpc_pb2_grpc as lnrpc_grpc
-import rpc_pb2 as lnrpc
+from test_utils.utils import TailableProc, BITCOIND_CONFIG
 import lnd_grpc
 from ephemeral_port_reserve import reserve
 
-
-import grpc
 import logging
 import os
 import time
-import codecs
-
 
 # Needed for grpc to negotiate a valid cipher suite
 os.environ["GRPC_SSL_CIPHER_SUITES"] = "ECDHE-ECDSA-AES256-GCM-SHA384"
@@ -39,8 +32,8 @@ class LndD(TailableProc):
             '--rpclisten=127.0.0.1:{}'.format(self.rpc_port),
             '--restlisten=127.0.0.1:{}'.format(self.rest_port),
             '--listen=127.0.0.1:{}'.format(self.port),
-            '--tlscertpath=test-tls.cert',
-            '--tlskeypath=test-tls.key',
+            '--tlscertpath=test_utils/test-tls.cert',
+            '--tlskeypath=test_utils/test-tls.key',
             '--bitcoin.node=bitcoind',
             '--bitcoind.rpchost=127.0.0.1:{}'.format(BITCOIND_CONFIG.get('rpcport', 18332)),
             '--bitcoind.rpcuser=rpcuser',
@@ -91,7 +84,8 @@ class LndNode(lnd_grpc.Client):
                          rpc_host='localhost',
                          rpc_port=str(self.daemon.rpc_port),
                          network='regtest',
-                         tls_cert_path=str(os.getcwd() + '/test-tls.cert'),
+                         tls_cert_path=str(os.getcwd() +
+                                           '/test_utils/test-tls.cert'),
                          macaroon_path=lightning_dir + 'chain/bitcoin/regtest/admin.macaroon')
 
     def id(self):

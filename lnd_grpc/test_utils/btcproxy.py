@@ -3,7 +3,7 @@
 from flask import Flask, request
 from bitcoin.rpc import JSONRPCError
 from bitcoin.rpc import RawProxy as BitcoinProxy
-from utils import BitcoinD
+from test_utils.utils import BitcoinD
 from cheroot.wsgi import Server
 from cheroot.wsgi import PathInfoDispatcher
 

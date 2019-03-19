@@ -6,7 +6,7 @@ import bitcoin.rpc as bitcoin
 import grpc
 
 import lnd_grpc as py_rpc
-import rpc_pb2 as rpc_pb2
+from protos import rpc_pb2 as rpc_pb2
 
 #######################
 # Configure variables #

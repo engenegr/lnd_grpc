@@ -1,24 +1,13 @@
-from binascii import unhexlify, hexlify
-from btcproxy import ProxiedBitcoinD
-from eclair import EclairNode
-from ephemeral_port_reserve import reserve
-from hashlib import sha256
 from itertools import product
-from lightningd import LightningNode
-from lnd import LndNode
-from concurrent import futures
-from utils import BitcoinD
 
-import rpc_pb2_grpc
-import rpc_pb2
+from protos import rpc_pb2
 
-from fixtures import *
+from test_utils.fixtures import *
+from test_utils.lnd import LndNode
 
 import logging
-import os
 import pytest
 import sys
-import tempfile
 import time
 import grpc
 
@@ -133,7 +122,7 @@ def test_get_transactions(node_factory, impl):
 @pytest.mark.parametrize("impl", impls, ids=idfn)
 def test_send_coins(node_factory, impl):
     node = node_factory.get_node(implementation=impl)
-    node.add_funds(node.bitcoin, 5)
+    node.add_funds(node.bitcoin, 1)
     p2wkh_address = node.new_address(address_type='p2wkh').address
     np2wkh_address = node.new_address(address_type='np2wkh').address
 
@@ -148,6 +137,22 @@ def test_send_coins(node_factory, impl):
             address_type='p2wkh').address, amount=100000 * -1))
     pytest.raises(grpc.RpcError, lambda: node.send_coins(node.new_address(
             address_type='p2wkh').address, amount=1000000000000000))
+
+
+@pytest.mark.parametrize("impl", impls, ids=idfn)
+def test_list_unspent(node_factory, impl):
+    node = node_factory.get_node(implementation=impl)
+    node.add_funds(node.bitcoin, 1)
+    assert type(node.list_unspent(0, 1000)) == rpc_pb2.ListUnspentResponse
+
+
+@pytest.mark.parametrize("impl", impls, ids=idfn)
+def test_subscribe_transactions(node_factory, impl):
+    node = node_factory.get_node(implementation=impl)
+    subscription = node.subscribe_transactions()
+    node.add_funds(node.bitcoin, 1)
+    assert type(subscription) == grpc._channel._Rendezvous
+    assert type(subscription.__next__()) == rpc_pb2.Transaction
 #
 #
 # def confirm_channel(bitcoind, n1, n2):

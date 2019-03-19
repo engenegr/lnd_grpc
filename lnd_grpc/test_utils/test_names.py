@@ -1,7 +1,7 @@
 import inspect
 import unittest
 
-import rpc_pb2_grpc as pb2_grpc
+from protos import rpc_pb2_grpc as pb2_grpc
 import lnd_grpc as py_rpc
 
 

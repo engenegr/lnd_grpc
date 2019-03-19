@@ -43,20 +43,20 @@ SLEEP_TIME = 0.5
 def initialise_clients():
     global BITCOIN_ADDR
 
-    alice = py_rpc.Client(lnd_dir=ALICE_LND_DIR,
+    alice = py_rpc.Client(data_dir=ALICE_LND_DIR,
                           network=ALICE_NETWORK,
-                          grpc_host=ALICE_RPC_HOST,
-                          grpc_port=ALICE_RPC_PORT,
+                          rpc_host=ALICE_RPC_HOST,
+                          rpc_port=ALICE_RPC_PORT,
                           macaroon_path=ALICE_MACAROON_PATH)
     alice.pub_key = alice.get_info().identity_pubkey
     alice.lightning_addr = py_rpc.Client.lightning_address(
             pubkey=alice.pub_key,
             host=ALICE_HOST_ADDR)
 
-    bob = py_rpc.Client(lnd_dir=BOB_LND_DIR,
+    bob = py_rpc.Client(data_dir=BOB_LND_DIR,
                         network=BOB_NETWORK,
-                        grpc_host=BOB_RPC_HOST,
-                        grpc_port=BOB_RPC_PORT,
+                        rpc_host=BOB_RPC_HOST,
+                        rpc_port=BOB_RPC_PORT,
                         macaroon_path=BOB_MACAROON_PATH)
     bob.pub_key = bob.get_info().identity_pubkey
     bob.lightning_addr = py_rpc.Client.lightning_address(

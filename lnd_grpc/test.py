@@ -20,8 +20,9 @@ import pytest
 import sys
 import tempfile
 import time
+import grpc
 
-impls = [LndNode, LndNode]
+impls = [LndNode]
 
 if TEST_DEBUG:
     logging.basicConfig(level=logging.DEBUG, stream=sys.stdout)
@@ -54,7 +55,7 @@ def sync_blockheight(btc, nodes):
 
     print("Waiting for %d nodes to blockheight %d" % (len(nodes), blocks))
     for n in nodes:
-        wait_for(lambda: n.info()['blockheight'] == blocks, interval=1)
+        wait_for(lambda: n.get_info().block_height == blocks, interval=1)
 
 
 def generate_until(btc, success, blocks=30, interval=1):
@@ -82,35 +83,71 @@ def idfn(impls):
 def test_start(bitcoind, node_factory, impl):
     node = node_factory.get_node(implementation=impl)
     assert node.get_info()
-    # sync_blockheight(bitcoind, [node])
+    sync_blockheight(bitcoind, [node])
 
 
-# @pytest.mark.parametrize("impl", impls, ids=idfn)
-# def test_wallet_balance(node_factory, impl):
-#     node = node_factory.get_node(implementation=impl)
-#     assert(type(node.get_info()), rpc_pb2.GetInfoResponse)
-#     lambda function prevents TypeError being raised before assert is run.
-#     node.assertRaises(TypeError, lambda: node.alice.wallet_balance('please'))
+@pytest.mark.parametrize("impl", impls, ids=idfn)
+def test_wallet_balance(node_factory, impl):
+    node = node_factory.get_node(implementation=impl)
 
-# @pytest.mark.parametrize("impls", product(impls, repeat=2), ids=idfn)
-# def test_connect(node_factory, bitcoind, impls):
-#     node1 = node_factory.get_node(implementation=impls[0])
-#     node2 = node_factory.get_node(implementation=impls[1])
-#
-#     # Needed by lnd in order to have at least one block in the last 2 hours
-#     bitcoind.rpc.generate(1)
-#
-#     print("Connecting {}@{}:{} -> {}@{}:{}".format(
-#         node1.id(), 'localhost', node1.daemon.port,
-#         node2.id(), 'localhost', node2.daemon.port))
-#     node1.connect('localhost', node2.daemon.port, node2.id())
-#
-#     wait_for(lambda: node1.peers(), timeout=5)
-#     wait_for(lambda: node2.peers(), timeout=5)
-#
-#     # TODO(cdecker) Check that we are connected
-#     assert node1.id() in node2.peers()
-#     assert node2.id() in node1.peers()
+    assert type(node.get_info()) == rpc_pb2.GetInfoResponse
+    pytest.raises(TypeError, node.wallet_balance(), 'please')
+
+
+@pytest.mark.parametrize("impls", product(impls, repeat=2), ids=idfn)
+def test_connect(node_factory, bitcoind, impls):
+    node1 = node_factory.get_node(implementation=impls[0])
+    node2 = node_factory.get_node(implementation=impls[1])
+
+    # Needed by lnd in order to have at least one block in the last 2 hours
+    bitcoind.rpc.generate(1)
+
+    print("Connecting {}@{}:{} -> {}@{}:{}".format(
+        node1.id(), 'localhost', node1.daemon.port,
+        node2.id(), 'localhost', node2.daemon.port))
+    node1.connect(str(node2.id() + '@localhost:' + str(node2.daemon.port)))
+
+    wait_for(lambda: node1.list_peers(), timeout=5)
+    wait_for(lambda: node2.list_peers(), timeout=5)
+
+    assert node1.id() in [p.pub_key for p in node2.list_peers()]
+    assert node2.id() in [p.pub_key for p in node1.list_peers()]
+
+
+@pytest.mark.parametrize("impl", impls, ids=idfn)
+def test_channel_balance(node_factory, impl):
+    node = node_factory.get_node(implementation=impl)
+
+    assert type(node.channel_balance()) == rpc_pb2.ChannelBalanceResponse
+    pytest.raises(TypeError, node.channel_balance(), 'please')
+
+
+@pytest.mark.parametrize("impl", impls, ids=idfn)
+def test_get_transactions(node_factory, impl):
+    node = node_factory.get_node(implementation=impl)
+
+    assert type(node.get_transactions()) == rpc_pb2.TransactionDetails
+    pytest.raises(TypeError, node.get_transactions(), 'please')
+
+
+@pytest.mark.parametrize("impl", impls, ids=idfn)
+def test_send_coins(node_factory, impl):
+    node = node_factory.get_node(implementation=impl)
+    node.add_funds(node.bitcoin, 5)
+    p2wkh_address = node.new_address(address_type='p2wkh').address
+    np2wkh_address = node.new_address(address_type='np2wkh').address
+
+    send1 = node.send_coins(addr=p2wkh_address, amount=100000)
+    node.bitcoin.rpc.generate(1)
+    time.sleep(0.5)
+    send2 = node.send_coins(addr=np2wkh_address, amount=100000)
+
+    assert type(send1) == rpc_pb2.SendCoinsResponse
+    assert type(send2) == rpc_pb2.SendCoinsResponse
+    pytest.raises(grpc.RpcError, lambda: node.send_coins(node.new_address(
+            address_type='p2wkh').address, amount=100000 * -1))
+    pytest.raises(grpc.RpcError, lambda: node.send_coins(node.new_address(
+            address_type='p2wkh').address, amount=1000000000000000))
 #
 #
 # def confirm_channel(bitcoind, n1, n2):

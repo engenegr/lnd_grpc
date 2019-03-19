@@ -1,6 +1,7 @@
 from btcproxy import ProxiedBitcoinD
 from ephemeral_port_reserve import reserve
 from concurrent import futures
+from lnd import LndNode
 
 import os
 import pytest

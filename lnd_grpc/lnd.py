@@ -84,7 +84,6 @@ class LndNode(lnd_grpc.Client):
         self.bitcoin = bitcoind
         self.executor = executor
         self.daemon = LndD(lightning_dir, bitcoind, port=lightning_port)
-        # self.rpc = LndRpc(self.daemon.rpc_port)
         self.logger = logging.getLogger('lnd-node({})'.format(lightning_port))
         self.myid = None
         self.node_id = node_id
@@ -95,10 +94,9 @@ class LndNode(lnd_grpc.Client):
                          tls_cert_path=str(os.getcwd() + '/test-tls.cert'),
                          macaroon_path=lightning_dir + 'chain/bitcoin/regtest/admin.macaroon')
 
-
     def id(self):
         if not self.myid:
-            self.myid = self.get_info()['id']
+            self.myid = self.get_info().identity_pubkey
         return self.myid
 
     def restart(self):
@@ -113,7 +111,20 @@ class LndNode(lnd_grpc.Client):
         self.daemon.start()
         print(vars())
 
+    def add_funds(self, bitcoind, amount):
+        addr = self.new_address('p2wkh').address
+        bitcoind.rpc.sendtoaddress(addr, amount)
+        self.daemon.wait_for_log("Inserting unconfirmed transaction")
+        bitcoind.rpc.generate(3)
+        self.daemon.wait_for_log("Marking unconfirmed transaction")
 
+        # The above still doesn't mean the wallet balance is updated,
+        # so let it settle a bit
+        i = 0
+        while self.wallet_balance().total_balance == amount and i < 30:
+            time.sleep(1)
+            i += 1
+        assert(self.wallet_balance().total_balance == amount * 10**8)
 
 
 # class LndNode(lnd_grpc.Client):
@@ -158,11 +169,6 @@ class LndNode(lnd_grpc.Client):
     #     peers = self.rpc.stub.ListPeers(lnrpc.ListPeersRequest()).peers
     #     return [p.pub_key for p in peers]
     #
-    # def wallet_balance2(self):
-    #     req = lnrpc.WalletBalanceRequest()
-    #     response = self.no_macaroon_stub.WalletBalance(req)
-    #     return response
-    #
     # def check_channel(self, remote):
     #     """ Make sure that we have an active channel with remote
     #     """
@@ -177,22 +183,7 @@ class LndNode(lnd_grpc.Client):
     #     channel = channel_by_remote[remote_id]
     #     self.logger.debug("Channel {} -> {} state: {}".format(self_id, remote_id, channel))
     #     return channel.active
-    #
-    # def addfunds(self, bitcoind, satoshis):
-    #     req = lnrpc.NewAddressRequest(type=1)
-    #     addr = self.rpc.stub.NewAddress(req).address
-    #     bitcoind.rpc.sendtoaddress(addr, float(satoshis) / 10**8)
-    #     self.daemon.wait_for_log("Inserting unconfirmed transaction")
-    #     bitcoind.rpc.generate(1)
-    #     self.daemon.wait_for_log("Marking unconfirmed transaction")
-    #
-    #     # The above still doesn't mean the wallet balance is updated,
-    #     # so let it settle a bit
-    #     i = 0
-    #     while self.rpc.stub.WalletBalance(lnrpc.WalletBalanceRequest()).total_balance == satoshis and i < 30:
-    #         time.sleep(1)
-    #         i += 1
-    #     assert(self.rpc.stub.WalletBalance(lnrpc.WalletBalanceRequest()).total_balance == satoshis)
+
     #
     # def openchannel(self, node_id, host, port, satoshis):
     #     peers = self.rpc.stub.ListPeers(lnrpc.ListPeersRequest()).peers

@@ -27,7 +27,6 @@ class NodeFactory(object):
         self.nodes = []
         self.executor = executor
         self.bitcoind = bitcoind
-        # self.btcd = btcd
 
     def get_node(self, implementation):
         node_id = self.next_id

@@ -7,7 +7,7 @@ from itertools import product
 from lightningd import LightningNode
 from lnd import LndNode
 from concurrent import futures
-from utils import BitcoinD, BtcD
+from utils import BitcoinD
 
 import rpc_pb2_grpc
 import rpc_pb2

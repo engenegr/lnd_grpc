@@ -120,6 +120,25 @@ class LndNode(lnd_grpc.Client):
             i += 1
         assert(self.wallet_balance().total_balance == amount * 10**8)
 
+    def check_channel(self, remote):
+        """ Make sure that we have an active channel with remote
+        """
+        self_id = self.id()
+        remote_id = remote.id()
+        channels = self.list_channels()
+        channel_by_remote = {c.remote_pubkey: c for c in channels}
+        if remote_id not in channel_by_remote:
+            self.logger.warning("Channel {} -> {} not found".format(self_id, remote_id))
+            return False
+
+        channel = channel_by_remote[remote_id]
+        self.logger.debug("Channel {} -> {} state: {}".format(self_id, remote_id, channel))
+        return channel.active
+
+    def block_sync(self, blockhash):
+        print("Waiting for node to learn about", blockhash)
+        self.daemon.wait_for_log('NTFN: New block: height=([0-9]+), sha={}'.format(blockhash))
+
 
 # class LndNode(lnd_grpc.Client):
 #

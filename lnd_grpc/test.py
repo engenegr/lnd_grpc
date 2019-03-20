@@ -72,6 +72,23 @@ def get_addresses(node, response='str'):
         return p2wkh_address, np2wkh_address
 
 
+def confirm_channel(bitcoind, n1, n2):
+    print("Waiting for channel {} -> {} to confirm".format(n1.id(), n2.id()))
+    assert n1.id() in [p.pub_key for p in n2.list_peers()]
+    assert n2.id() in [p.pub_key for p in n1.list_peers()]
+    for i in range(10):
+        time.sleep(2)
+        if n1.check_channel(n2) and n2.check_channel(n1):
+            print("Channel {} -> {} confirmed".format(n1.id(), n2.id()))
+            return True
+        bhash = bitcoind.rpc.generate(1)[0]
+        n1.block_sync(bhash)
+        n2.block_sync(bhash)
+
+    # Last ditch attempt
+    return n1.check_channel(n2) and n2.check_channel(n1)
+
+
 def idfn(impls):
     return "_".join([i.displayName for i in impls])
 
@@ -316,6 +333,31 @@ class TestInteractiveLightning:
         # check node 2 connected to node 3 using connect_peer() and list_peers()
         assert node2.id() not in [p.pub_key for p in node3.list_peers()]
         assert node3.id() not in [p.pub_key for p in node2.list_peers()]
+
+    # @pytest.mark.parametrize("impls", product(impls, repeat=2), ids=idfn)
+    def test_open_channel(self, bitcoind, node_factory):
+        node1 = node_factory.get_node(implementation=LndNode)
+        node2 = node_factory.get_node(implementation=LndNode)
+
+        node1.connect(str(node2.id() + '@localhost:' + str(node2.daemon.port)))
+
+        wait_for(lambda: node1.list_peers(), interval=1)
+        wait_for(lambda: node2.list_peers(), interval=1)
+
+        node1.add_funds(bitcoind, 1)
+
+        node1.open_channel_sync(node_pubkey_string=node2.id(),
+                                local_funding_amount=10**7)
+        time.sleep(1)
+        bitcoind.rpc.generate(2)
+
+        assert confirm_channel(bitcoind, node1, node2)
+
+        assert(node1.check_channel(node2))
+        assert(node2.check_channel(node1))
+
+        # Generate some more, to reach the announcement depth
+        bitcoind.rpc.generate(4)
 
 
 # @pytest.mark.parametrize("impls", product(impls, repeat=2), ids=idfn)

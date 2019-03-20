@@ -48,24 +48,25 @@ class NodeFactory(object):
             n.daemon.stop()
 
             
-@pytest.fixture
-def directory(request, test_base_dir, test_name):
-    """Return a per-test specific directory.
+@pytest.fixture(scope='session')
+def directory(request, test_base_dir):
+    """Return a per-test-session specific directory.
 
     This makes a unique test-directory even if a test is rerun multiple times.
 
     """
-    global __attempts
-    # Auto set value if it isn't in the dict yet
-    __attempts[test_name] = __attempts.get(test_name, 0) + 1
-    directory = os.path.join(test_base_dir, "{}_{}".format(test_name, __attempts[test_name]))
+    # global __attempts
+    # # Auto set value if it isn't in the dict yet
+    # __attempts[test_name] = __attempts.get(test_name, 0) + 1
+    # directory = os.path.join(test_base_dir, "{}_{}".format(test_name, __attempts[test_name]))
+    directory = test_base_dir
     request.node.has_errors = False
 
     yield directory
 
     # This uses the status set in conftest.pytest_runtest_makereport to
     # determine whether we succeeded or failed.
-    if not request.node.has_errors and request.node.rep_call.outcome == 'passed':
+    if not request.node.has_errors: #and request.node.rep_call.outcome == 'passed':
         shutil.rmtree(directory)
     else:
         logging.debug("Test execution failed, leaving the test directory {} intact.".format(directory))
@@ -78,8 +79,8 @@ def test_base_dir():
 
     yield directory
 
-    if os.listdir(directory) == []:
-        shutil.rmtree(directory)
+    # if not os.listdir(directory) == []:
+    #     shutil.rmtree(directory)
 
         
 @pytest.fixture
@@ -87,7 +88,7 @@ def test_name(request):
     yield request.function.__name__
 
     
-@pytest.fixture()
+@pytest.fixture(scope='session')
 def bitcoind(directory):
     proxyport = reserve()
     btc = ProxiedBitcoinD(bitcoin_dir=os.path.join(directory, "bitcoind"), proxyport=proxyport)

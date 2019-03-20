@@ -246,6 +246,78 @@ class TestNonInteractiveLightning:
         assert type(node.forwarding_history()) == rpc_pb2.ForwardingHistoryResponse
 
 
+class TestInteractiveLightning:
+
+    #@pytest.mark.parametrize("impls", product(impls, repeat=4), ids=idfn)
+    def test_peer_connection(self, node_factory, bitcoind):
+        node1 = node_factory.get_node(implementation=LndNode)
+        node2 = node_factory.get_node(implementation=LndNode)
+        node3 = node_factory.get_node(implementation=LndNode)
+
+        # Needed by lnd in order to have at least one block in the last 2 hours
+        bitcoind.rpc.generate(1)
+
+        """
+        Connection tests
+        """
+
+        print("Connecting {}@{}:{} -> {}@{}:{}".format(
+            node1.id(), 'localhost', node1.daemon.port,
+            node2.id(), 'localhost', node2.daemon.port))
+        connection1 = node1.connect(str(node2.id() + '@localhost:' + str(node2.daemon.port)))
+
+        wait_for(lambda: node1.list_peers(), timeout=5)
+        wait_for(lambda: node2.list_peers(), timeout=5)
+
+        # check node 1 connected to node 2 using connect() and list_peers()
+        assert type(connection1) == rpc_pb2.ConnectPeerResponse
+        assert node1.id() in [p.pub_key for p in node2.list_peers()]
+        assert node2.id() in [p.pub_key for p in node1.list_peers()]
+
+        print("Connecting {}@{}:{} -> {}@{}:{}".format(
+                node2.id(), 'localhost', node2.daemon.port,
+                node3.id(), 'localhost', node3.daemon.port))
+        node3_ln_addr = node3.lightning_address(pubkey=node3.id(),
+                                                host='localhost:' + str(node3.daemon.port))
+        node2.connect_peer(node3_ln_addr)
+
+        wait_for(lambda: node2.list_peers(), timeout=5)
+        wait_for(lambda: node3.list_peers(), timeout=5)
+
+        # check node 2 connected to node 3 using connect() and list_peers()
+        assert node2.id() in [p.pub_key for p in node3.list_peers()]
+        assert node3.id() in [p.pub_key for p in node2.list_peers()]
+
+        node1.bitcoin.rpc.generate(1)
+        time.sleep(0.5)
+
+        """
+        Disconnection tests
+        """
+
+        print("Disconnecting {}@{}:{} from {}@{}:{}".format(
+                node1.id(), 'localhost', node1.daemon.port,
+                node2.id(), 'localhost', node2.daemon.port))
+        node1.disconnect_peer(pub_key=str(node2.id()))
+
+        time.sleep(1)
+
+        # check node 1 connected to node 2 using connect() and list_peers()
+        assert node1.id() not in [p.pub_key for p in node2.list_peers()]
+        assert node2.id() not in [p.pub_key for p in node1.list_peers()]
+
+        print("Disconnecting {}@{}:{} from {}@{}:{}".format(
+                node2.id(), 'localhost', node2.daemon.port,
+                node3.id(), 'localhost', node3.daemon.port))
+        node2.disconnect_peer(node3.id())
+
+        time.sleep(1)
+
+        # check node 2 connected to node 3 using connect_peer() and list_peers()
+        assert node2.id() not in [p.pub_key for p in node3.list_peers()]
+        assert node3.id() not in [p.pub_key for p in node2.list_peers()]
+
+
 # @pytest.mark.parametrize("impls", product(impls, repeat=2), ids=idfn)
 # def test_connect(node_factory, bitcoind, impls):
 #     node1 = node_factory.get_node(implementation=impls[0])

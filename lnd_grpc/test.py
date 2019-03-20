@@ -1,15 +1,14 @@
+import logging
+import sys
+import time
+import grpc
+
 from itertools import product
 
 from protos import rpc_pb2
 
 from test_utils.fixtures import *
 from test_utils.lnd import LndNode
-
-import logging
-import pytest
-import sys
-import time
-import grpc
 
 impls = [LndNode]
 
@@ -77,99 +76,190 @@ def idfn(impls):
     return "_".join([i.displayName for i in impls])
 
 
-@pytest.mark.parametrize("impl", impls, ids=idfn)
-def test_start(bitcoind, node_factory, impl):
-    node = node_factory.get_node(implementation=impl)
-    assert node.get_info()
-    sync_blockheight(bitcoind, [node])
+#########
+# Tests #
+#########
 
 
-@pytest.mark.parametrize("impl", impls, ids=idfn)
-def test_wallet_balance(node_factory, impl):
-    node = node_factory.get_node(implementation=impl)
+class TestNonInteractive:
 
-    assert type(node.get_info()) == rpc_pb2.GetInfoResponse
-    pytest.raises(TypeError, node.wallet_balance(), 'please')
+    def test_start(self, node_factory, bitcoind):
+        node = node_factory.get_node(implementation=LndNode)
+        assert node.get_info()
+        sync_blockheight(bitcoind, [node])
+
+    def test_wallet_balance(self, node_factory):
+        node = node_factory.get_node(implementation=LndNode)
+
+        assert type(node.get_info()) == rpc_pb2.GetInfoResponse
+        pytest.raises(TypeError, node.wallet_balance(), 'please')
+
+    def test_channel_balance(self, node_factory):
+        node = node_factory.get_node(implementation=LndNode)
+
+        assert type(node.channel_balance()) == rpc_pb2.ChannelBalanceResponse
+        pytest.raises(TypeError, node.channel_balance(), 'please')
+
+    def test_get_transactions(self, node_factory):
+        node = node_factory.get_node(implementation=LndNode)
+
+        assert type(node.get_transactions()) == rpc_pb2.TransactionDetails
+        pytest.raises(TypeError, node.get_transactions(), 'please')
+
+    def test_send_coins(self, node_factory):
+        node = node_factory.get_node(implementation=LndNode)
+        node.add_funds(node.bitcoin, 1)
+        p2wkh_address, np2wkh_address = get_addresses(node)
+
+        send1 = node.send_coins(addr=p2wkh_address, amount=100000)
+        node.bitcoin.rpc.generate(1)
+        time.sleep(0.5)
+        send2 = node.send_coins(addr=np2wkh_address, amount=100000)
+
+        assert type(send1) == rpc_pb2.SendCoinsResponse
+        assert type(send2) == rpc_pb2.SendCoinsResponse
+        pytest.raises(grpc.RpcError, lambda: node.send_coins(node.new_address(
+                address_type='p2wkh').address, amount=100000 * -1))
+        pytest.raises(grpc.RpcError, lambda: node.send_coins(node.new_address(
+                address_type='p2wkh').address, amount=1000000000000000))
+
+    def test_list_unspent(self, node_factory):
+        node = node_factory.get_node(implementation=LndNode)
+        node.add_funds(node.bitcoin, 1)
+        assert type(node.list_unspent(0, 1000)) == rpc_pb2.ListUnspentResponse
+
+    def test_subscribe_transactions(self, node_factory):
+        node = node_factory.get_node(implementation=LndNode)
+        subscription = node.subscribe_transactions()
+        node.add_funds(node.bitcoin, 1)
+        assert type(subscription) == grpc._channel._Rendezvous
+        assert type(subscription.__next__()) == rpc_pb2.Transaction
+
+    def test_new_address(self, node_factory):
+        node = node_factory.get_node(implementation=LndNode)
+        p2wkh_address, np2wkh_address = get_addresses(node, 'response')
+        assert type(p2wkh_address) == rpc_pb2.NewAddressResponse
+        assert type(np2wkh_address) == rpc_pb2.NewAddressResponse
+
+    def test_sign_verify_message(self, node_factory):
+        node = node_factory.get_node(implementation=LndNode)
+        message = 'Test message to sign and verify.'
+        signature = node.sign_message(message)
+        assert type(signature) == rpc_pb2.SignMessageResponse
+        verified_message = node.verify_message(message, signature.signature)
+        assert type(verified_message) == rpc_pb2.VerifyMessageResponse
+
+    # Can't test response as we return response.peers in method.
+    # def test_list_peers(self, node_factory):
+    #     node = node_factory.get_node(implementation=LndNode)
+
+    def test_get_info(self, node_factory):
+        node = node_factory.get_node(implementation=LndNode)
+        assert type(node.get_info()) == rpc_pb2.GetInfoResponse
+
+    def test_pending_channels(self, node_factory):
+        node = node_factory.get_node(implementation=LndNode)
+        assert type(node.pending_channels()) == rpc_pb2.PendingChannelsResponse
+
+    # Skipping list_channels and closed_channels as we don't return their responses directly
+
+    def test_add_invoice(self, node_factory):
+        node = node_factory.get_node(implementation=LndNode)
+        invoice = node.add_invoice(value=500)
+        assert type(invoice) == rpc_pb2.AddInvoiceResponse
+
+    def test_list_invoices(self, node_factory):
+        node = node_factory.get_node(implementation=LndNode)
+        assert type(node.list_invoices()) == rpc_pb2.ListInvoiceResponse
+
+    def test_lookup_invoice(self, node_factory):
+        node = node_factory.get_node(implementation=LndNode)
+        payment_hash = node.add_invoice(value=500).r_hash
+        assert type(node.lookup_invoice(r_hash=payment_hash)) == rpc_pb2.Invoice
+
+    def test_subscribe_invoices(self, node_factory):
+        node = node_factory.get_node(implementation=LndNode)
+        subscription = node.subscribe_invoices()
+        node.add_invoice(value=500)
+        assert type(subscription) == grpc._channel._Rendezvous
+        assert type(subscription.__next__()) == rpc_pb2.Invoice
+
+    def test_decode_payment_request(self, node_factory):
+        node = node_factory.get_node(implementation=LndNode)
+        pay_req = node.add_invoice(value=500).payment_request
+        decoded_req = node.decode_pay_req(pay_req=pay_req)
+        assert type(decoded_req) == rpc_pb2.PayReq
+
+    def test_list_payments(self, node_factory):
+        node = node_factory.get_node(implementation=LndNode)
+        assert type(node.list_payments()) == rpc_pb2.ListPaymentsResponse
+
+    def test_delete_all_payments(self, node_factory):
+        node = node_factory.get_node(implementation=LndNode)
+        assert type(node.delete_all_payments()) == rpc_pb2.DeleteAllPaymentsResponse
+
+    def test_describe_graph(self, node_factory):
+        node = node_factory.get_node(implementation=LndNode)
+        assert type(node.describe_graph()) == rpc_pb2.ChannelGraph
+
+    # Skipping get_chan_info, subscribe_chan_events, get_node_info, query_routes
+
+    def test_get_network_info(self, node_factory):
+        node = node_factory.get_node(implementation=LndNode)
+        assert type(node.get_network_info()) == rpc_pb2.NetworkInfo
+
+    def test_stop_daemon(self, node_factory):
+        node = node_factory.get_node(implementation=LndNode)
+        assert type(node.stop_daemon()) == rpc_pb2.StopResponse
+        with pytest.raises(grpc.RpcError):
+            node.get_info()
+
+    # def test_subscribe_channel_graph(self, node_factory):
+    #     node = node_factory.get_node(implementation=LndNode)
+    #     subscription = node.subscribe_channel_graph()
+    #     # Need to open a channel now
+    #     assert type(subscription) == grpc._channel._Rendezvous
+    #     assert type(subscription.__next__()) == rpc_pb2.Invoice
+
+    def test_debug_level(self, node_factory):
+        node = node_factory.get_node(implementation=LndNode)
+        assert type(node.debug_level(level_spec='warn')) == rpc_pb2.DebugLevelResponse
+
+    def test_fee_report(self, node_factory):
+        node = node_factory.get_node(implementation=LndNode)
+        assert type(node.fee_report()) == rpc_pb2.FeeReportResponse
+
+    def test_forwarding_history(self, node_factory):
+        node = node_factory.get_node(implementation=LndNode)
+        assert type(node.forwarding_history()) == rpc_pb2.ForwardingHistoryResponse
 
 
-@pytest.mark.parametrize("impls", product(impls, repeat=2), ids=idfn)
-def test_connect(node_factory, bitcoind, impls):
-    node1 = node_factory.get_node(implementation=impls[0])
-    node2 = node_factory.get_node(implementation=impls[1])
-
-    # Needed by lnd in order to have at least one block in the last 2 hours
-    bitcoind.rpc.generate(1)
-
-    print("Connecting {}@{}:{} -> {}@{}:{}".format(
-        node1.id(), 'localhost', node1.daemon.port,
-        node2.id(), 'localhost', node2.daemon.port))
-    node1.connect(str(node2.id() + '@localhost:' + str(node2.daemon.port)))
-
-    wait_for(lambda: node1.list_peers(), timeout=5)
-    wait_for(lambda: node2.list_peers(), timeout=5)
-
-    assert node1.id() in [p.pub_key for p in node2.list_peers()]
-    assert node2.id() in [p.pub_key for p in node1.list_peers()]
-
-
-@pytest.mark.parametrize("impl", impls, ids=idfn)
-def test_channel_balance(node_factory, impl):
-    node = node_factory.get_node(implementation=impl)
-
-    assert type(node.channel_balance()) == rpc_pb2.ChannelBalanceResponse
-    pytest.raises(TypeError, node.channel_balance(), 'please')
+# @pytest.mark.parametrize("impls", product(impls, repeat=2), ids=idfn)
+# def test_connect(node_factory, bitcoind, impls):
+#     node1 = node_factory.get_node(implementation=impls[0])
+#     node2 = node_factory.get_node(implementation=impls[1])
+#
+#     # Needed by lnd in order to have at least one block in the last 2 hours
+#     bitcoind.rpc.generate(1)
+#
+#     print("Connecting {}@{}:{} -> {}@{}:{}".format(
+#         node1.id(), 'localhost', node1.daemon.port,
+#         node2.id(), 'localhost', node2.daemon.port))
+#     node1.connect(str(node2.id() + '@localhost:' + str(node2.daemon.port)))
+#
+#     wait_for(lambda: node1.list_peers(), timeout=5)
+#     wait_for(lambda: node2.list_peers(), timeout=5)
+#
+#     assert node1.id() in [p.pub_key for p in node2.list_peers()]
+#     assert node2.id() in [p.pub_key for p in node1.list_peers()]
+#
+#
+#
+#
 
 
-@pytest.mark.parametrize("impl", impls, ids=idfn)
-def test_get_transactions(node_factory, impl):
-    node = node_factory.get_node(implementation=impl)
 
-    assert type(node.get_transactions()) == rpc_pb2.TransactionDetails
-    pytest.raises(TypeError, node.get_transactions(), 'please')
-
-
-@pytest.mark.parametrize("impl", impls, ids=idfn)
-def test_send_coins(node_factory, impl):
-    node = node_factory.get_node(implementation=impl)
-    node.add_funds(node.bitcoin, 1)
-    p2wkh_address, np2wkh_address = get_addresses(node)
-
-    send1 = node.send_coins(addr=p2wkh_address, amount=100000)
-    node.bitcoin.rpc.generate(1)
-    time.sleep(0.5)
-    send2 = node.send_coins(addr=np2wkh_address, amount=100000)
-
-    assert type(send1) == rpc_pb2.SendCoinsResponse
-    assert type(send2) == rpc_pb2.SendCoinsResponse
-    pytest.raises(grpc.RpcError, lambda: node.send_coins(node.new_address(
-            address_type='p2wkh').address, amount=100000 * -1))
-    pytest.raises(grpc.RpcError, lambda: node.send_coins(node.new_address(
-            address_type='p2wkh').address, amount=1000000000000000))
-
-
-@pytest.mark.parametrize("impl", impls, ids=idfn)
-def test_list_unspent(node_factory, impl):
-    node = node_factory.get_node(implementation=impl)
-    node.add_funds(node.bitcoin, 1)
-    assert type(node.list_unspent(0, 1000)) == rpc_pb2.ListUnspentResponse
-
-
-@pytest.mark.parametrize("impl", impls, ids=idfn)
-def test_subscribe_transactions(node_factory, impl):
-    node = node_factory.get_node(implementation=impl)
-    subscription = node.subscribe_transactions()
-    node.add_funds(node.bitcoin, 1)
-    assert type(subscription) == grpc._channel._Rendezvous
-    assert type(subscription.__next__()) == rpc_pb2.Transaction
-
-
-@pytest.mark.parametrize("impl", impls, ids=idfn)
-def test_new_address(node_factory, impl):
-    node = node_factory.get_node(implementation=impl)
-    p2wkh_address, np2wkh_address = get_addresses(node, 'response')
-    assert type(p2wkh_address) == rpc_pb2.NewAddressResponse
-    assert type(np2wkh_address) == rpc_pb2.NewAddressResponse
-
+##########
 #
 #
 # def confirm_channel(bitcoind, n1, n2):

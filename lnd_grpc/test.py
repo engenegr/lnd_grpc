@@ -81,7 +81,7 @@ def idfn(impls):
 #########
 
 
-class TestNonInteractive:
+class TestNonInteractiveLightning:
 
     def test_start(self, node_factory, bitcoind):
         node = node_factory.get_node(implementation=LndNode)
@@ -122,6 +122,18 @@ class TestNonInteractive:
                 address_type='p2wkh').address, amount=100000 * -1))
         pytest.raises(grpc.RpcError, lambda: node.send_coins(node.new_address(
                 address_type='p2wkh').address, amount=1000000000000000))
+
+    def test_send_many(self, node_factory):
+        node = node_factory.get_node(implementation=LndNode)
+        node.add_funds(node.bitcoin, 1)
+        p2wkh_address, np2wkh_address = get_addresses(node)
+        send_dict = {p2wkh_address: 100000,
+                      np2wkh_address: 100000}
+
+        send = node.send_many(addr_to_amount=send_dict)
+        node.bitcoin.rpc.generate(1)
+        time.sleep(0.5)
+        assert type(send) == rpc_pb2.SendManyResponse
 
     def test_list_unspent(self, node_factory):
         node = node_factory.get_node(implementation=LndNode)

@@ -56,7 +56,7 @@ class LndD(TailableProc):
         super().start()
         self.wait_for_log('RPC server listening on')
         self.wait_for_log('Done catching up block hashes')
-        time.sleep(5)
+        time.sleep(3)
 
         logging.info('LND started (pid: {})'.format(self.proc.pid))
 
@@ -116,7 +116,7 @@ class LndNode(lnd_grpc.Client):
         # so let it settle a bit
         i = 0
         while self.wallet_balance().total_balance == amount and i < 30:
-            time.sleep(1)
+            time.sleep(0.25)
             i += 1
         assert(self.wallet_balance().total_balance == amount * 10**8)
 
